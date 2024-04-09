@@ -1,5 +1,6 @@
 import wordBank from "./word-bank.js";
 import prompt from "readline-sync";
+prompt.setDefaultOptions({ caseSensitive: false });
 
 let playerStat = { win: 0, loss: 0, rounds: 0 }; // creates a global object that keeps track of wins and losses.
 let gameState = { isPlaying: true, isGuessing: false }; //could roll gameStats into this directly, honestly
@@ -65,49 +66,51 @@ let gameData = setup(wordBank, fetchRandom);
 
 //Parses player input.
 const parseAns = (gData, matrix, render) => {
-	// If player guesses correct word as a string, game ends immediately.
-	if (gData.playerAns === gData.secret) {
-		gData.hasWon = true;
-		return render(gData, matrix);
-	}
-
-	// If this is true, then the checker continues. Otherwise, the player will receive an error and asked for another answer they haven't yet given.
-	gData.isNew = !gData.oldAns.includes(gData.playerAns);
-	// Checks whether player just repeated a previous guess.
+	//Creates a variable to store an upper-case version of the player's answer. Then if it perfectly matches the secret word, the game ends.
+	let ansComp = gData.playerAns.toLocaleUpperCase();
+	let isWordMatch = gData.secret === ansComp;
 
 	if (!gData.isNew) {
-		console.log(`Oops! You've already guessed "${gData.playerAns}"!`);
+		console.log(`Oops! You've already guessed "${gameData.playerAns}"!`);
 		return render(gData, matrix);
 	}
 
 	// If it's a new guess, it's added to gData.oldAns. Then a copy of the secret word is turned into an array searched for a letter matching the player's answer.
 	else if (gData.isNew) {
+		// If player guesses correct word as a string, game ends immediately.
+		if (isWordMatch) {
+			gData.hasWon = true;
+			return render(gData, matrix);
+		}
+
 		const secretArray = structuredClone(gData.secret.split(""));
-		gData.isCorrect = secretArray.includes(gData.playerAns);
+		gData.isCorrect = secretArray.includes(ansComp);
 		// If there is no match, then the map case changes and the number of incorrect guesses left reduces.
 		if (!gData.isCorrect) {
-			console.log(`Sorry, but ${gData.playerAns} isn't part the word!`);
+			console.log(`Sorry, but "${gData.playerAns}" isn't part the word!`);
 			gData.ansInc += 1;
 		}
 
-		// If there is a match, then for each index value of the secret word that matches in the final answer that isn't already changed, gData.finalAns[index] is overwritten to reflect the new information.
+		// If there is a match, then for each index value of the secret word that matches in the final answer that is still "_", gData.finalAns[index] is overwritten to reflect the new information.
 		else if (gData.isCorrect) {
 			let i = 0;
+			console.log(`Yes! "${gData.playerAns}" is part the word!`);
 			for (let index of secretArray) {
-				if (index.includes(gData.playerAns) && gData.finalAns[i] === "_") {
-					gData.finalAns[i] = index;
+				if (index.includes(ansComp) && gData.finalAns[i] === "_") {
+					gData.finalAns[i] = gData.playerAns;
 				}
 				i++;
 			}
 		}
-
+		let finalComp = gData.finalAns.join("").toLocaleUpperCase();
 		//This checks whether each letter in the secret word has been guessed correctly. If so, game
-		if (gData.finalAns.join("") === gData.secret) {
+		if (finalComp === gData.secret) {
 			gData.hasWon = true;
 		}
 		gData.oldAns.push(gData.playerAns);
-	} // end of if gData.isNew
-	return render(gData, matrix);
+
+		return render(gData, matrix);
+	}
 };
 
 // Takes the original graphics and gameData, then makes changes before drawing a deep copy version based on
@@ -136,10 +139,8 @@ const drawGame = (gData, matrix) => {
 			gData.hasLost = true;
 			break;
 		default:
-			console.log(`\n\n... I've no idea how you broke my render iteration code, but I haven't crashed yet, \nso let's pretend nothing ever happened, okay?\n`);
+			console.log(`\n\n... I've no idea how you broke my render iteration code, but I haven't crashed yet, \nso let's pretend nothing ever happened, okay?\n\n`);
 	}
-
-	console.log(`Previous Guesses: ${gData.oldAns.join(" ")}`);
 
 	// If the parser function flagged that the player has won or lost the game, one of these will run to display the end state and end the isGuessing loop.
 	if (gData.hasWon) {
@@ -166,22 +167,38 @@ const drawGame = (gData, matrix) => {
 
 	let matMap = matrix.map((index) => index.join("")).join("\n"); // Turns a copy of the matrix into a string that draws each former nested array on a new line.
 	console.log(`\n${matMap}\n    ${gData.finalAns.join(" ")}\n\n`); // Draws the gallows and displays the current final answer status.
-
+	console.log(`Previous Guesses: ${gData.oldAns.join(" ")}`);
 	// If the round is over, this isn't necessary.
 	let tempTries = 6 - gData.ansInc;
 	if (gameState.isGuessing) {
-		console.log(`You can guess incorrectly ${tempTries} more time(s).`);
+		if (tempTries !== 1) {
+			console.log(`You can guess incorrectly ${tempTries} more times.`);
+		} else {
+			console.log(`You can guess incorrectly ${tempTries} more time.`);
+		}
+	}
+
+	//Win and loss messages.
+	if (gData.hasWon) {
+		console.log(`Congrats, you've won! The word was "${gData.secret}".`);
+	}
+	if (gData.hasLost) {
+		console.log(`Sorry, you've lost. The word was "${gData.secret}".`);
 	}
 
 	return gData;
 }; // Game loop doesn't end even if gameState.isGuessing = false. This is likely because the finalAns filling code- or much of the parser- is setting flags correctly.
 
-console.log(`Welcome to the Hangman Guessing Game! Press CTRL+C to stop at any time.\n\n`);
-let rawStart = prompt.question(`Would you like to start the game? Y/N: `, { limit: ["Y", "N"], limitMessage: `Just "Y" or "N," please.` });
-let startGame = rawStart.toUpperCase();
-if (startGame === "Y") {
+// Asks if the user wants to start the game. If yes, then the game will run. If not, the game will run the shutdown script.
+console.log(
+	`\n∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎\n\n Welcome to the Hangman Guessing Game!\n---------------------------------------\n\nPress CTRL+C to stop at any time.\n∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎\n\n`
+);
+
+// Asks the user if they want to play the game. If so, the gameState.isPlaying while loop runs until the user decides to stop
+let startGame = prompt.question(`Would you like to start the game? Y/N:\n`, { limit: ["y", "n"], limitMessage: `I asked for "Y" or "N":\n`, trueValue: ["y"], falseValue: ["n"] });
+if (startGame === true) {
 	gameState.isGuessing = true;
-} else if (startGame === "N") {
+} else if (startGame === false) {
 	gameState.isPlaying = false;
 	console.log(`Common mistake. Have a good day!`);
 }
@@ -193,50 +210,47 @@ while (gameState.isPlaying) {
 	drawGame(gameData, gallows);
 
 	// Keeps the player in the game loop for the round until they either run out of guesses or complete the word.
-	// Note: if time allows, maybe add a limit option to the answer prompt that's an exact match for the secret word? THat would improve the gameplay.
 	while (gameState.isGuessing) {
-		let rawGuess = prompt.question(`Guess a letter: `, {
-			//prettier-ignore
-			limit: ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z",`${gameData.secret}`],
-			limitMessage: "Oops! That's not a valid guess. Please try again.",
+		gameData.playerAns = prompt.question(`Guess a letter: `, {
+			limit: ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", `${gameData.secret}`],
+			limitMessage: "\nOops! That's not a valid guess.",
 		});
-		gameData.playerAns = rawGuess.toUpperCase();
-		// console.clear(); <= Try using this if you want to clean things up a bit. It should clear the console after the player input is accepted
+		console.log(`\n`);
+		let hasAnsUp = gameData.oldAns.includes(gameData.playerAns.toLocaleUpperCase());
+		let hasAnsDown = gameData.oldAns.includes(gameData.playerAns.toLocaleLowerCase());
+
+		if (hasAnsUp || hasAnsDown) {
+			gameData.isNew = false;
+		} else {
+			gameData.isNew = true;
+		}
+
 		parseAns(gameData, gallows, drawGame);
 	}
 
 	// If the round is over, this will ask the player if they want to play again. If they do,
 	if (!gameState.isGuessing) {
 		console.log(`Wins: ${playerStat.win} | Losses: ${playerStat.loss} \n`);
-		let rawNew = prompt.question(`Would you like to play again? Y/N: `, {
+		let newGame = prompt.question(`Would you like to play again? Y/N:\n`, {
 			limit: ["Y", "N"],
+			limitMessage: `I asked for "Y" or "N":\n`,
+			trueValue: ["y"],
+			falseValue: ["n"],
 		});
-		let newGame = rawNew.toUpperCase();
 
 		switch (newGame) {
-			case "Y":
+			case true:
 				gameData = setup(wordBank, fetchRandom);
 				gameState.isGuessing = true;
 				break;
-			case "N":
+			case false:
 				gameState.isPlaying = false;
 				let winPercent = (playerStat.win / playerStat.rounds) * 100;
 				let percentRound = Number(winPercent.toFixed(4));
 				prompt.question(
-					`\n################\n\nFinal Stats: \n  Total Rounds: ${playerStat.rounds}\n  Wins: ${playerStat.win}\n  Losses: ${playerStat.loss}\n  Win %: ${percentRound}%\n\n################\n\nThanks for playing!\n Press the any key to exit.`
+					`\n################\n\nFinal Stats: \n  Total Rounds: ${playerStat.rounds}\n  Wins: ${playerStat.win}\n  Losses: ${playerStat.loss}\n  Win %: ${percentRound}%\n\n################\nThanks for playing!\n\nPress the "any" key to exit: `
 				);
 				break;
 		}
 	}
 }
-
-//Still requires: loop for the full game;
-//-Welcome Message //
-
-//-loop for each session; // Yup!
-
-//-answer parser function; // Maybe done
-
-//-graphics function that changes the image based on number of incorrect guesses and checks whether the user won or lost or already guessed that character or guessed an invalid character. If they won or lost, add 1 to the appropriate tally, inform them of the end condition, and prompt them to hit enter to continue before tossing them to the play again prompt.
-
-//-Check to see if player wants to go again, where a yes resets the gameData and gameState objects and run the game again. Or, if not, close the program with a goodbye message. ----I think I got this done
