@@ -1,6 +1,5 @@
 import wordBank from "./word-bank.js";
 import prompt from "readline-sync";
-//prompt.setDefaultOptions({ caseSensitive: false });
 
 let playerStat = { win: 0, loss: 0, rounds: 0 }; // Creates a global object that keeps track of wins and losses.
 let gameState = { isPlaying: true, isGuessing: false }; // Creates a global object that keeps track of the player's wins and losses.
